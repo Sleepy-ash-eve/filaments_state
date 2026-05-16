@@ -1,0 +1,9 @@
+{
+  "name": "Filament Tracker",
+  "short_name": "Filaments",
+  "description": "Track your 3D printer filament spools",
+  "start_url": "/filaments_state/",
+  "display": "standalone",
+  "background_color": "#fff9f0",
+  "theme_color": "#f97316"
+}
