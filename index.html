@@ -322,6 +322,54 @@
             cursor: pointer;
             margin-top: 2px;
         }
+
+        /* ── New spool toggle ── */
+        .new-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff9f0;
+            border: 2px solid #ffe4cc;
+            border-radius: 14px;
+            padding: 13px 16px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .new-toggle.on { background: #fef3c7; border-color: #f59e0b; }
+        .new-toggle-label { flex: 1; font-size: 15px; font-weight: 700; color: var(--text); }
+        .new-toggle-label small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 1px; }
+
+        .toggle-switch {
+            width: 44px; height: 26px;
+            background: #e5e7eb;
+            border-radius: 13px;
+            position: relative;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .new-toggle.on .toggle-switch { background: #f59e0b; }
+        .new-toggle.on .toggle-switch::after { transform: translateX(18px); }
+
+        /* ── New spool card badge ── */
+        .new-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e;
+            font-size: 11px; font-weight: 800;
+            padding: 3px 10px; border-radius: 8px;
+            letter-spacing: 0.3px;
+        }
     </style>
 </head>
 <body>
@@ -352,17 +400,19 @@
             <div class="field-row">
                 <div class="field">
                     <label>Type *</label>
-                    <select id="f-type">
-                        <option value="PLA">PLA</option>
-                        <option value="PLA+">PLA+</option>
-                        <option value="PETG">PETG</option>
-                        <option value="ABS">ABS</option>
-                        <option value="ASA">ASA</option>
-                        <option value="TPU">TPU</option>
-                        <option value="Nylon">Nylon</option>
-                        <option value="Resin">Resin</option>
-                        <option value="Other">Other</option>
-                    </select>
+                    <input id="f-type" type="text" list="type-list" placeholder="PLA, PETG, ABS…" autocomplete="off">
+                    <datalist id="type-list">
+                        <option value="PLA">
+                        <option value="PLA+">
+                        <option value="PETG">
+                        <option value="ABS">
+                        <option value="ASA">
+                        <option value="TPU">
+                        <option value="Nylon">
+                        <option value="Resin">
+                        <option value="PEEK">
+                        <option value="PC">
+                    </datalist>
                 </div>
                 <div class="field">
                     <label>Diameter</label>
@@ -383,14 +433,24 @@
                 </div>
             </div>
 
-            <div class="field-row">
-                <div class="field">
-                    <label>Total (g)</label>
-                    <input id="f-total" type="number" placeholder="1000" min="0" max="10000">
+            <div class="new-toggle" id="new-toggle" onclick="toggleNew()">
+                <div class="new-toggle-label">
+                    🎁 New spool
+                    <small>Still sealed — quantity unknown</small>
                 </div>
-                <div class="field">
-                    <label>Remaining (g) *</label>
-                    <input id="f-remaining" type="number" placeholder="750" min="0" max="10000">
+                <div class="toggle-switch"></div>
+            </div>
+
+            <div id="weight-fields">
+                <div class="field-row">
+                    <div class="field">
+                        <label>Total (g)</label>
+                        <input id="f-total" type="number" placeholder="1000" min="0" max="10000">
+                    </div>
+                    <div class="field">
+                        <label>Remaining (g) *</label>
+                        <input id="f-remaining" type="number" placeholder="750" min="0" max="10000">
+                    </div>
                 </div>
             </div>
 
@@ -430,9 +490,10 @@
         // -- render --
         function render() {
             // update header subtitle
-            const totalG = spools.reduce((s, p) => s + (p.remaining || 0), 0);
+            const totalG = spools.reduce((s, p) => s + (p.isNew ? 0 : (p.remaining || 0)), 0);
+            const newCount = spools.filter(s => s.isNew).length;
             document.getElementById('hdr-sub').textContent =
-                spools.length ? `${spools.length} spool${spools.length !== 1 ? 's' : ''} · ${(totalG/1000).toFixed(2)} kg remaining` : 'No spools yet';
+                spools.length ? `${spools.length} spool${spools.length !== 1 ? 's' : ''}${newCount ? ' · ' + newCount + ' sealed' : ''} · ${(totalG/1000).toFixed(2)} kg remaining` : 'No spools yet';
 
             // filter chips
             const types = ['All', ...new Set(spools.map(s => s.type))];
@@ -442,7 +503,7 @@
 
             // summary
             const totalSpools = spools.length;
-            const lowSpools = spools.filter(s => pct(s) < 25).length;
+            const lowSpools = spools.filter(s => !s.isNew && pct(s) < 25).length;
             const totalKg = (totalG / 1000).toFixed(2);
             document.getElementById('summary').innerHTML = `
                 <div class="stat"><div class="val">${totalSpools}</div><div class="lbl">Spools</div></div>
@@ -464,11 +525,18 @@
                 return;
             }
 
-            const sorted = [...filtered].sort((a, b) => pct(a) - pct(b));
+            const sorted = [...filtered].sort((a, b) => {
+                if (a.isNew && !b.isNew) return -1;
+                if (!a.isNew && b.isNew) return 1;
+                return pct(a) - pct(b);
+            });
             el.innerHTML = sorted.map(s => {
                 const p = pct(s);
                 const typeColor = TYPE_COLORS[s.type] || '#6b7280';
-                const barColor = p < 15 ? '#fb7185' : p < 35 ? '#fbbf24' : typeColor;
+                const barColor = s.isNew ? '#f59e0b' : p < 15 ? '#fb7185' : p < 35 ? '#fbbf24' : typeColor;
+                const weightHtml = s.isNew
+                    ? `<div class="new-badge">🎁 NEW</div>`
+                    : `<div class="grams">${s.remaining ?? '?'}</div><div class="unit">grams</div><div class="pct">${s.total ? p + '%' : ''}</div>`;
                 return `
                 <div class="spool-card" style="border-left-color:${s.color || '#e2e8f0'}" onclick="openEdit('${s.id}')">
                     <div class="spool-top">
@@ -482,14 +550,10 @@
                                 <span class="spool-color-name">${s.diameter ? esc(s.diameter) + ' · ' : ''}${s.colorName ? esc(s.colorName) : ''}</span>
                             </div>
                         </div>
-                        <div class="spool-weight">
-                            <div class="grams">${s.remaining ?? '?'}</div>
-                            <div class="unit">grams</div>
-                            <div class="pct">${s.total ? p + '%' : ''}</div>
-                        </div>
+                        <div class="spool-weight">${weightHtml}</div>
                     </div>
                     <div class="prog-track">
-                        <div class="prog-fill" style="width:${s.total ? p : 50}%;background:${barColor}"></div>
+                        <div class="prog-fill" style="width:${s.isNew ? 100 : (s.total ? p : 50)}%;background:${barColor}"></div>
                     </div>
                     ${s.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">📝 ${esc(s.notes)}</div>` : ''}
                 </div>`;
@@ -497,6 +561,7 @@
         }
 
         function pct(s) {
+            if (s.isNew) return 100;
             if (!s.total || !s.remaining) return 0;
             return Math.round((s.remaining / s.total) * 100);
         }
@@ -506,6 +571,21 @@
         }
 
         function setFilter(t) { activeFilter = t; render(); }
+
+        // -- new toggle --
+        let isNewSpool = false;
+
+        function toggleNew() {
+            isNewSpool = !isNewSpool;
+            document.getElementById('new-toggle').classList.toggle('on', isNewSpool);
+            document.getElementById('weight-fields').style.display = isNewSpool ? 'none' : 'block';
+        }
+
+        function setNewState(val) {
+            isNewSpool = val;
+            document.getElementById('new-toggle').classList.toggle('on', val);
+            document.getElementById('weight-fields').style.display = val ? 'none' : 'block';
+        }
 
         // -- modal --
         function openAdd() {
@@ -520,6 +600,7 @@
             document.getElementById('f-remaining').value = '';
             document.getElementById('f-color').value = '#e2e8f0';
             document.getElementById('color-preview').style.background = '#e2e8f0';
+            setNewState(false);
             document.getElementById('overlay').classList.add('open');
             setTimeout(() => document.getElementById('f-brand').focus(), 100);
         }
@@ -540,6 +621,7 @@
             document.getElementById('f-total').value = s.total || '';
             document.getElementById('f-remaining').value = s.remaining ?? '';
             document.getElementById('f-notes').value = s.notes || '';
+            setNewState(!!s.isNew);
             document.getElementById('overlay').classList.add('open');
         }
 
@@ -557,18 +639,20 @@
 
         function saveSpool() {
             const brand = document.getElementById('f-brand').value.trim();
-            const remaining = parseFloat(document.getElementById('f-remaining').value);
             if (!brand) { alert('Please enter a brand.'); return; }
-            if (isNaN(remaining)) { alert('Please enter the remaining amount in grams.'); return; }
+
+            const remaining = isNewSpool ? null : parseFloat(document.getElementById('f-remaining').value);
+            if (!isNewSpool && isNaN(remaining)) { alert('Please enter the remaining amount in grams.'); return; }
 
             const data = {
                 brand,
-                type:      document.getElementById('f-type').value,
+                type:      document.getElementById('f-type').value.trim() || 'Other',
                 diameter:  document.getElementById('f-diameter').value,
                 colorName: document.getElementById('f-color-name').value.trim(),
                 color:     document.getElementById('f-color').value,
-                total:     parseFloat(document.getElementById('f-total').value) || null,
+                total:     isNewSpool ? null : (parseFloat(document.getElementById('f-total').value) || null),
                 remaining,
+                isNew:     isNewSpool,
                 notes:     document.getElementById('f-notes').value.trim(),
             };
 
