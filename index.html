@@ -394,7 +394,8 @@
 
             <div class="field">
                 <label>Brand *</label>
-                <input id="f-brand" type="text" placeholder="e.g. Bambu, Prusament, Hatchbox">
+                <input id="f-brand" type="text" list="brand-list" placeholder="e.g. Bambu, Prusament, Hatchbox" autocomplete="off">
+                <datalist id="brand-list"></datalist>
             </div>
 
             <div class="field-row">
@@ -587,6 +588,11 @@
             document.getElementById('weight-fields').style.display = val ? 'none' : 'block';
         }
 
+        function refreshBrandList() {
+            const brands = [...new Set(spools.map(s => s.brand).filter(Boolean))];
+            document.getElementById('brand-list').innerHTML = brands.map(b => `<option value="${esc(b)}">`).join('');
+        }
+
         // -- modal --
         function openAdd() {
             editingId = null;
@@ -601,6 +607,7 @@
             document.getElementById('f-color').value = '#e2e8f0';
             document.getElementById('color-preview').style.background = '#e2e8f0';
             setNewState(false);
+            refreshBrandList();
             document.getElementById('overlay').classList.add('open');
             setTimeout(() => document.getElementById('f-brand').focus(), 100);
         }
@@ -622,6 +629,7 @@
             document.getElementById('f-remaining').value = s.remaining ?? '';
             document.getElementById('f-notes').value = s.notes || '';
             setNewState(!!s.isNew);
+            refreshBrandList();
             document.getElementById('overlay').classList.add('open');
         }
 
