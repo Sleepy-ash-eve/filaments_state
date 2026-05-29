@@ -40,8 +40,24 @@
             box-shadow: 0 4px 20px rgba(249,115,22,0.35);
         }
 
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
         header h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
         header p  { font-size: 13px; opacity: 0.85; margin-top: 3px; font-weight: 500; }
+
+        .btn-export {
+            background: rgba(255,255,255,0.2);
+            border: 1.5px solid rgba(255,255,255,0.4);
+            color: white;
+            border-radius: 10px;
+            padding: 6px 12px;
+            font-size: 13px; font-weight: 700;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 5px;
+            transition: background 0.15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .btn-export:active { background: rgba(255,255,255,0.35); }
 
         /* ── Filter bar ── */
         .filter-bar {
@@ -374,7 +390,10 @@
 </head>
 <body>
     <header>
-        <h1>🧵 Filament Tracker</h1>
+        <div class="header-top">
+            <h1>🧵 Filament Tracker</h1>
+            <button class="btn-export" onclick="exportJSON()">⬇ Export JSON</button>
+        </div>
         <p id="hdr-sub">Loading…</p>
     </header>
 
@@ -683,6 +702,17 @@
             localStorage.setItem('spools', JSON.stringify(spools));
             closeModal();
             render();
+        }
+
+        function exportJSON() {
+            if (!spools.length) { alert('No spools to export.'); return; }
+            const blob = new Blob([JSON.stringify(spools, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `filaments-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         render();
